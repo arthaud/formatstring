@@ -3,6 +3,16 @@ import struct
 
 
 def make_pattern(buffer_size, start_offset=1):
+    '''
+    Generate a pattern to get the offset of your buffer
+
+    Args:
+        buffer_size (int): The maximum size of your buffer
+        start_offset (int): The starting offset
+
+    Returns:
+        A pattern for the format string
+    '''
     pattern = 'ABCDEFGH'
     offset = start_offset
 
@@ -18,6 +28,18 @@ def make_pattern(buffer_size, start_offset=1):
 
 
 def compute_offset(buffer, start_offset=1, endianness='@'):
+    '''
+    Compute the offset of your buffer given the result of make_pattern
+
+    Args:
+        buffer (string): The result of make_pattern
+        start_offset (int): The starting offset
+        endianness ('@', '<' or '>'): The endianness of your system (see struct.pack)
+
+    Returns:
+        False if the offset is not found
+        Otherwise, returns the couple (offset, padding)
+    '''
     memory = buffer.split('|')
     if memory[0] == 'ABCDEFGH':
         memory = memory[1:]
