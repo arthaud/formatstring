@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
+import argparse
+import sys
 from formatstring import architectures
 from formatstring import pattern
-import argparse
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compute the offset of your buffer, given the result of pattern_create')
-    parser.add_argument('buffer', metavar='BUFFER',
+    parser.add_argument('buffer', metavar='BUFFER', nargs='?',
                         help='The result of pattern_create')
     parser.add_argument('-s', '--start-offset', metavar='OFFSET', type=int, default=1,
                         help='The starting offset')
     parser.add_argument('-a', '--arch', metavar='ARCH',
                         help='The architecture (x86_32, x86_64, arm, sparc, ...)')
     args = parser.parse_args()
+
+    if not args.buffer:
+        print('Enter the result of the format string on a pattern given by pattern_create:')
+        args.buffer = sys.stdin.readline()
 
     if args.arch:
         if args.arch not in architectures.archs:
