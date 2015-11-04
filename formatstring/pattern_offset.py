@@ -4,7 +4,7 @@ import sys
 from formatstring import architectures
 from formatstring import pattern
 
-if __name__ == '__main__':
+def main(args=None):
     desc = 'Compute the offset of your buffer, given the result of pattern_create'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('buffer', metavar='BUFFER', nargs='?',
@@ -15,7 +15,7 @@ if __name__ == '__main__':
     parser.add_argument('-a', '--arch', metavar='ARCH',
                         help='The architecture '
                              '(x86_32, x86_64, arm, sparc, ...)')
-    args = parser.parse_args()
+    args = parser.parse_args(args)
 
     if not args.buffer:
         print('Enter the result of the format string on a pattern '
@@ -42,3 +42,7 @@ if __name__ == '__main__':
                   'with a padding of %d bytes' % (offset, padding))
     else:
         print('Buffer not found, look forward (or check the architecture).')
+
+
+if __name__ == '__main__':
+    main()
