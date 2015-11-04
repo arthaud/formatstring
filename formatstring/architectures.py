@@ -3,7 +3,8 @@
 
 def struct_fmt(size, signed=False):
     '''
-    Helper that returns the format for struct.pack, given a size and a signedness
+    Helper that returns the format for struct.pack, given a size and
+    a signedness
 
     >>> struct_fmt(4, False)
     'I'
@@ -43,7 +44,9 @@ class Architecture:
         return self.endian_fmt + struct_fmt(self.bytes, False)
 
     def __repr__(self):
-        return '<%s (%d bits, %s endian)>' % (self.name, self.bits, self.endian)
+        return '<%s (%d bits, %s endian)>' % (self.name,
+                                              self.bits,
+                                              self.endian)
 
 
 archs = {}

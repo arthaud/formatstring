@@ -48,7 +48,8 @@ def compute_offset(buffer, start_offset=1, arch=None):
     if memory[0] == 'ABCDEFGH':
         memory = memory[1:]
 
-    memory = map(lambda x: struct.pack(arch.address_fmt, int(x, 16)), memory)
+    memory = map(lambda x: struct.pack(arch.address_fmt, int(x, 16)),
+                 memory)
     memory = b''.join(memory)
 
     for i in range(len(buffer)):
@@ -56,6 +57,7 @@ def compute_offset(buffer, start_offset=1, arch=None):
             if i % arch.bytes == 0:
                 return (start_offset + i // arch.bytes, 0)
             else:
-                return (start_offset + i // arch.bytes + 1, arch.bytes - i % arch.bytes)
+                return (start_offset + i // arch.bytes + 1,
+                        arch.bytes - i % arch.bytes)
 
     return False # not found

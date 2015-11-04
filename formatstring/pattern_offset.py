@@ -5,17 +5,21 @@ from formatstring import architectures
 from formatstring import pattern
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Compute the offset of your buffer, given the result of pattern_create')
+    desc = 'Compute the offset of your buffer, given the result of pattern_create'
+    parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('buffer', metavar='BUFFER', nargs='?',
                         help='The result of pattern_create')
-    parser.add_argument('-s', '--start-offset', metavar='OFFSET', type=int, default=1,
+    parser.add_argument('-s', '--start-offset', metavar='OFFSET',
+                        type=int, default=1,
                         help='The starting offset')
     parser.add_argument('-a', '--arch', metavar='ARCH',
-                        help='The architecture (x86_32, x86_64, arm, sparc, ...)')
+                        help='The architecture '
+                             '(x86_32, x86_64, arm, sparc, ...)')
     args = parser.parse_args()
 
     if not args.buffer:
-        print('Enter the result of the format string on a pattern given by pattern_create:')
+        print('Enter the result of the format string on a pattern '
+              'given by pattern_create:')
         args.buffer = sys.stdin.readline()
 
     if args.arch:
@@ -34,6 +38,7 @@ if __name__ == '__main__':
         if padding == 0:
             print('Found buffer at offset %d' % offset)
         else:
-            print('Found buffer, use offset %d with a padding of %d bytes' % (offset, padding))
+            print('Found buffer at offset %d '
+                  'with a padding of %d bytes' % (offset, padding))
     else:
         print('Buffer not found, look forward (or check the architecture).')
