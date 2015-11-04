@@ -2,6 +2,13 @@
 
 Formatstring is a **python 3** library to help the exploitation of **format string vulnerabilities**.
 
+## Install
+
+**formatstring** can be installed from PyPI (Python package index) using pip:
+```bash
+pip install formatstring
+```
+
 ## Examples
 
 * Generate a pattern to detect the offset of the printed buffer
