@@ -13,33 +13,44 @@ def unpack_bytes(arch, value):
     return struct.unpack(arch.endian_fmt + struct_fmt(len(value), False), value)[0]
 
 
-class NullByteException(Exception):
-    pass
+class ForbiddenByteException(Exception):
+    def __init__(self, byte):
+        super().__init__('generated payload contains the forbidden byte 0x%x' % byte)
 
 
 class PayloadSettings:
-    def __init__(self, offset, padding=0, arch=None, null_bytes=True, padding_byte=None):
+    def __init__(self, offset, padding=0, arch=None, forbidden_bytes=b'', padding_byte=None):
         '''
         Args:
             offset (int): The offset of your buffer
             padding (int): The needed padding
             arch (Architecture): The architecture
-            null_bytes (bool): Null bytes are allowed
+            forbidden_bytes (bytes): Bytes to avoid
             padding byte (bytes): The byte used for padding
         '''
         self.offset = offset
         self.padding = padding
         self.arch = arch or local_arch()
-        self.null_bytes = null_bytes
+        self.forbidden_bytes = forbidden_bytes
 
-        if padding_byte:
+        if padding_byte and padding_byte not in self.forbidden_bytes:
             self.padding_byte = padding_byte
+        elif b'\x00' not in self.forbidden_bytes:
+            self.padding_byte = b'\x00'
         else:
-            self.padding_byte = b'\x00' if self.null_bytes else b'\xff'
+            for c in range(0xff, -1, -1):
+                byte = bytes([c])
+                if byte not in self.forbidden_bytes:
+                    self.padding_byte = byte
+                    break
 
-    def check_null_bytes(self, payload):
-        if not self.null_bytes and b'\x00' in payload:
-            raise NullByteException('generated payload contains a null byte')
+    def contains_forbidden_byte(self, payload):
+        return any(byte in payload for byte in self.forbidden_bytes)
+
+    def check_forbidden_bytes(self, payload):
+        if self.contains_forbidden_byte(payload):
+            byte = next(filter(lambda b: b in payload, self.forbidden_bytes))
+            raise ForbiddenByteException(byte)
 
 
 class ReadPayload:
@@ -69,7 +80,7 @@ class ReadPayload:
         assert settings.padding + settings.arch.bytes * (offset - settings.offset) - start_len - len(payload) >= 0, 'bad padding'
         payload += settings.padding_byte * (settings.padding + settings.arch.bytes * (offset - settings.offset) - start_len - len(payload))
         payload += struct.pack(settings.arch.address_fmt, self.address)
-        settings.check_null_bytes(payload)
+        settings.check_forbidden_bytes(payload)
         return payload
 
 
@@ -98,12 +109,14 @@ class WritePayload:
         i = 0
         while i < len(addresses):
             addr = addresses[i]
+            packed_addr = struct.pack(settings.arch.address_fmt, addr)
 
-            if not settings.null_bytes and b'\x00' in struct.pack(settings.arch.address_fmt, addr):
-                # null byte in address, try to write at addr - 1
+            if settings.contains_forbidden_byte(packed_addr):
+                # forbidden byte in address, try to write at addr - 1
 
-                if b'\x00' in struct.pack(settings.arch.address_fmt, addr - 1):
-                    raise NullByteException('generated payload contains a null byte')
+                if settings.contains_forbidden_byte(struct.pack(settings.arch.address_fmt, addr - 1)):
+                    byte = next(filter(lambda b: b in packed_addr, settings.forbidden_bytes))
+                    raise ForbiddenByteException(byte)
 
                 byte0 = self.memory.get(addr - 1, 0)
 
@@ -191,5 +204,5 @@ class WritePayload:
         assert settings.padding + settings.arch.bytes * (start_offset - settings.offset) - start_len - len(payload) >= 0, 'bad padding'
         payload += settings.padding_byte * (settings.padding + settings.arch.bytes * (start_offset - settings.offset) - start_len - len(payload))
         payload += addresses
-        settings.check_null_bytes(payload)
+        settings.check_forbidden_bytes(payload)
         return payload
