@@ -98,6 +98,8 @@ class WritePayload:
     Write in memory
     '''
 
+    _write_specifier = {1: b'hhn', 2: b'hn', 4: b'n'}
+
     def __init__(self):
         self.memory = {}
 
@@ -177,6 +179,36 @@ class WritePayload:
 
         return writes
 
+    def _generate_offset(self, writes, settings, start_len):
+        start_offset = 1000000
+        last_start_offset = None
+
+        # refine start offset
+        while last_start_offset is None or start_offset < last_start_offset:
+            offset = start_offset
+            last_start_offset = start_offset
+
+            payload_len = 0
+            current_value = start_len
+            for addr, value, size in writes:
+                print_len = value - current_value
+                current_value = value
+
+                if print_len > 2:
+                    payload_len += len('%%%dc' % print_len)
+                else:
+                    payload_len += print_len
+
+                payload_len += len('%%%d$' % offset)
+                payload_len += len(self._write_specifier[size])
+                offset += 1
+
+            start_offset = settings.offset
+            start_offset += math.ceil((max(0, start_len - settings.padding) +
+                                       payload_len) / settings.arch.bytes)
+
+        return start_offset
+
     def generate(self, settings, start_len=0):
         assert self.memory, 'empty payload'
 
@@ -187,33 +219,15 @@ class WritePayload:
         writes.sort(key=operator.itemgetter(1))
 
         assert start_len <= writes[0][1], 'start length too big'
-        write_specifier = {1: b'hhn', 2: b'hn', 3: b'n'}
 
         # compute the offset
-        offset = settings.offset
-
-        estimated_payload_len = 0
-        current_value = start_len
-        for addr, value, size in writes:
-            print_len = value - current_value
-            current_value = value
-
-            if print_len > 2:
-                estimated_payload_len += len('%%%dc' % print_len)
-            else:
-                estimated_payload_len += print_len
-
-            estimated_payload_len += len('%%%d$%s' % (99999,
-                                                      write_specifier[size]))
-
-        offset += math.ceil((max(0, start_len - settings.padding) +
-                             estimated_payload_len) / settings.arch.bytes)
+        start_offset = self._generate_offset(writes, settings, start_len)
 
         # generate the payload
         payload = b''
         addresses = b''
         current_value = start_len
-        start_offset = offset
+        offset = start_offset
         for addr, value, size in writes:
             print_len = value - current_value
             current_value = value
@@ -224,7 +238,7 @@ class WritePayload:
                 payload += b'A' * print_len
 
             payload += b'%' + str(offset).encode('ascii')
-            payload += b'$' + write_specifier[size]
+            payload += b'$' + self._write_specifier[size]
             addresses += struct.pack(settings.arch.address_fmt, addr)
             offset += 1
 
