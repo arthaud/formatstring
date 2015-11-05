@@ -49,6 +49,10 @@ p[0x80497a8] = struct.pack('@I', 0x01020304)
 sys.stdout.buffer.write(p.generate(settings))
 ```
 
+## Doc
+
+The full documentation is [available here](https://github.com/arthaud/formatstring/wiki/User's-guide).
+
 ## Contributors
 
 Author: Maxime Arthaud (maxime@arthaud.me)
