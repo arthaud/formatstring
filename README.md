@@ -13,13 +13,13 @@ pip install formatstring
 
 * Generate a pattern to detect the offset of the printed buffer
 ```bash
-$ python formatstring/pattern_create.py 255
+$ fmtstr_pattern_create 255
 ABCDEFGH|%1$p|%2$p|%3$p|%4$p|%5$p|%6$p|%7$p|%8$p|%9$p|%10$p
 ```
 
 * Compute the offset, given the result of the format string on the previous pattern
 ```bash
-$ python formatstring/pattern_offset.py --arch x86_32
+$ fmtstr_pattern_offset --arch x86_32
 Enter the result of the format string on a pattern given by pattern_create:
 ABCDEFGH|0x400|0xf776e5a0|0x4|0x4|0x7|0x1b3220|0x43424120|0x47464544|0x31257c48|0x257c7024
 Found buffer at offset 8
